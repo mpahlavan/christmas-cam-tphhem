@@ -39,6 +39,7 @@ const CONTAINER_HEIGHT = 400;
 
 export default function HomeScreen() {
   const [imageUri, setImageUri] = useState<string | null>(null);
+  const [imageBase64, setImageBase64] = useState<string | null>(null);
   const [transformedImageUri, setTransformedImageUri] = useState<string | null>(null);
   const [selectedFilters, setSelectedFilters] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
@@ -47,6 +48,7 @@ export default function HomeScreen() {
   const [originalImageSize, setOriginalImageSize] = useState({ width: 0, height: 0 });
   const [imageError, setImageError] = useState(false);
   const [useAiTransform, setUseAiTransform] = useState(false);
+  const [showPreview, setShowPreview] = useState(true);
 
   const { transform, loading: transforming, error: transformError } = useChristmasTransform();
 
@@ -111,7 +113,8 @@ export default function HomeScreen() {
         mediaTypes: ['images'],
         allowsEditing: true,
         aspect: [4, 3],
-        quality: 1,
+        quality: 0.8,
+        base64: true,
       });
 
       console.log('Camera result:', JSON.stringify(result, null, 2));
@@ -127,12 +130,16 @@ export default function HomeScreen() {
         const uri = asset.uri;
         console.log('Photo captured successfully:', uri);
         console.log('Original image dimensions:', asset.width, asset.height);
-        
+        console.log('Base64 available:', !!asset.base64);
+
         setImageUri(uri);
+        setImageBase64(asset.base64 || null);
         setTransformedImageUri(null);
         setOriginalImageSize({ width: asset.width, height: asset.height });
         setSelectedFilters([]);
         setImageSize({ width: 0, height: 0 });
+        setUseAiTransform(false);
+        setShowPreview(true);
       } else {
         console.error('No image URI in result:', result);
         Alert.alert('Error', 'Failed to capture photo. Please try again.');
@@ -157,7 +164,8 @@ export default function HomeScreen() {
         mediaTypes: ['images'],
         allowsEditing: true,
         aspect: [4, 3],
-        quality: 1,
+        quality: 0.8,
+        base64: true,
       });
 
       console.log('Image picker result:', JSON.stringify(result, null, 2));
@@ -173,12 +181,16 @@ export default function HomeScreen() {
         const uri = asset.uri;
         console.log('Image selected successfully:', uri);
         console.log('Original image dimensions:', asset.width, asset.height);
-        
+        console.log('Base64 available:', !!asset.base64);
+
         setImageUri(uri);
+        setImageBase64(asset.base64 || null);
         setTransformedImageUri(null);
         setOriginalImageSize({ width: asset.width, height: asset.height });
         setSelectedFilters([]);
         setImageSize({ width: 0, height: 0 });
+        setUseAiTransform(false);
+        setShowPreview(true);
       } else {
         console.error('No image URI in result:', result);
         Alert.alert('Error', 'Failed to select image. Please try again.');
@@ -201,10 +213,13 @@ export default function HomeScreen() {
         return [...prev, filterId];
       }
     });
+    if (!useAiTransform) {
+      setShowPreview(true);
+    }
   };
 
   const applyAiTransform = async () => {
-    if (!imageUri) {
+    if (!imageUri || !imageBase64) {
       Alert.alert('Error', 'Please select an image first');
       return;
     }
@@ -217,6 +232,7 @@ export default function HomeScreen() {
     console.log('Applying AI transform with filters:', selectedFilters);
     const result = await transform({
       imageUri,
+      imageBase64,
       filters: selectedFilters,
     });
 
@@ -224,10 +240,11 @@ export default function HomeScreen() {
       console.log('Transform successful, new image URL:', result.url);
       setTransformedImageUri(result.url);
       setUseAiTransform(true);
+      setShowPreview(false);
       Alert.alert(
         'Success! 🎄',
-        'Your Christmas transformation is ready!',
-        [{ text: 'OK' }]
+        `Your Christmas transformation is ready! Took ${(result.duration_ms / 1000).toFixed(1)} seconds.`,
+        [{ text: 'Awesome!' }]
       );
     } else if (transformError) {
       console.error('Transform failed:', transformError);
@@ -242,6 +259,7 @@ export default function HomeScreen() {
   const resetImage = () => {
     console.log('Resetting image');
     setImageUri(null);
+    setImageBase64(null);
     setTransformedImageUri(null);
     setSelectedFilters([]);
     setImageSize({ width: 0, height: 0 });
@@ -249,6 +267,7 @@ export default function HomeScreen() {
     setContainerWidth(0);
     setImageError(false);
     setUseAiTransform(false);
+    setShowPreview(true);
   };
 
   const shareImage = async () => {
@@ -409,8 +428,8 @@ export default function HomeScreen() {
                     onError={handleImageError}
                   />
                   
-                  {!useAiTransform && imageSize.width > 0 && imageSize.height > 0 && (
-                    <View 
+                  {showPreview && !useAiTransform && imageSize.width > 0 && imageSize.height > 0 && (
+                    <View
                       style={[
                         styles.overlaysContainer,
                         {
@@ -424,18 +443,22 @@ export default function HomeScreen() {
                       {selectedFilters.includes('frame') && (
                         <FrameOverlay imageWidth={imageSize.width} imageHeight={imageSize.height} />
                       )}
-                      
+
                       {selectedFilters.includes('santa') && (
                         <SantaHatOverlay imageWidth={imageSize.width} imageHeight={imageSize.height} />
                       )}
-                      
+
                       {selectedFilters.includes('lights') && (
                         <LightsOverlay imageWidth={imageSize.width} imageHeight={imageSize.height} />
                       )}
-                      
+
                       {selectedFilters.includes('snow') && (
                         <SnowOverlay imageWidth={imageSize.width} imageHeight={imageSize.height} />
                       )}
+
+                      <View style={styles.previewBadge}>
+                        <Text style={styles.previewBadgeText}>Preview</Text>
+                      </View>
                     </View>
                   )}
 
@@ -669,6 +692,21 @@ const styles = StyleSheet.create({
   overlaysContainer: {
     position: 'absolute',
     pointerEvents: 'none',
+    zIndex: 10,
+  },
+  previewBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    paddingVertical: 4,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+  },
+  previewBadgeText: {
+    color: colors.card,
+    fontSize: 12,
+    fontWeight: '600',
   },
   transformingOverlay: {
     position: 'absolute',

@@ -20,6 +20,7 @@ import { SantaHatOverlay } from '@/components/ChristmasFilters/SantaHatOverlay';
 import { LightsOverlay } from '@/components/ChristmasFilters/LightsOverlay';
 import { FrameOverlay } from '@/components/ChristmasFilters/FrameOverlay';
 import { useChristmasTransform } from '@/hooks/useChristmasTransform';
+import { Model3DViewer } from '@/components/Model3DViewer';
 
 type ChristmasFilter = {
   id: string;
@@ -39,6 +40,7 @@ const CONTAINER_HEIGHT = 400;
 
 export default function HomeScreen() {
   const [imageUri, setImageUri] = useState<string | null>(null);
+  const [imageBase64, setImageBase64] = useState<string | null>(null);
   const [transformedImageUri, setTransformedImageUri] = useState<string | null>(null);
   const [selectedFilters, setSelectedFilters] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
@@ -48,6 +50,9 @@ export default function HomeScreen() {
   const [imageError, setImageError] = useState(false);
   const [useAiTransform, setUseAiTransform] = useState(false);
   const [showPreview, setShowPreview] = useState(true);
+  const [show3DModel, setShow3DModel] = useState(false);
+  const [modelUrl, setModelUrl] = useState<string | null>(null);
+  const [texturedModelUrl, setTexturedModelUrl] = useState<string | null>(null);
 
   const { transform, loading: transforming, error: transformError } = useChristmasTransform();
 
@@ -112,7 +117,8 @@ export default function HomeScreen() {
         mediaTypes: ['images'],
         allowsEditing: true,
         aspect: [4, 3],
-        quality: 1,
+        quality: 0.8,
+        base64: true,
       });
 
       console.log('Camera result:', JSON.stringify(result, null, 2));
@@ -128,8 +134,10 @@ export default function HomeScreen() {
         const uri = asset.uri;
         console.log('Photo captured successfully:', uri);
         console.log('Original image dimensions:', asset.width, asset.height);
-        
+        console.log('Base64 available:', !!asset.base64);
+
         setImageUri(uri);
+        setImageBase64(asset.base64 || null);
         setTransformedImageUri(null);
         setOriginalImageSize({ width: asset.width, height: asset.height });
         setSelectedFilters([]);
@@ -160,7 +168,8 @@ export default function HomeScreen() {
         mediaTypes: ['images'],
         allowsEditing: true,
         aspect: [4, 3],
-        quality: 1,
+        quality: 0.8,
+        base64: true,
       });
 
       console.log('Image picker result:', JSON.stringify(result, null, 2));
@@ -176,8 +185,10 @@ export default function HomeScreen() {
         const uri = asset.uri;
         console.log('Image selected successfully:', uri);
         console.log('Original image dimensions:', asset.width, asset.height);
-        
+        console.log('Base64 available:', !!asset.base64);
+
         setImageUri(uri);
+        setImageBase64(asset.base64 || null);
         setTransformedImageUri(null);
         setOriginalImageSize({ width: asset.width, height: asset.height });
         setSelectedFilters([]);
@@ -209,7 +220,7 @@ export default function HomeScreen() {
   };
 
   const applyAiTransform = async () => {
-    if (!imageUri) {
+    if (!imageUri || !imageBase64) {
       Alert.alert('Error', 'Please select an image first');
       return;
     }
@@ -222,18 +233,33 @@ export default function HomeScreen() {
     console.log('Applying AI transform with filters:', selectedFilters);
     const result = await transform({
       imageUri,
+      imageBase64,
       filters: selectedFilters,
     });
 
     if (result) {
       console.log('Transform successful, new image URL:', result.url);
+      console.log('3D Model URL:', result.modelUrl);
+      console.log('Textured Model URL:', result.texturedModelUrl);
+
       setTransformedImageUri(result.url);
       setUseAiTransform(true);
       setShowPreview(false);
+
+      // Set 3D model URLs if available
+      if (result.modelUrl) {
+        setModelUrl(result.modelUrl);
+        setTexturedModelUrl(result.texturedModelUrl || result.modelUrl);
+        setShow3DModel(true);
+      }
+
       Alert.alert(
         'Success! 🎄',
-        `Your Christmas transformation is ready! Took ${(result.duration_ms / 1000).toFixed(1)} seconds.`,
-        [{ text: 'Awesome!' }]
+        `Your 3D Christmas transformation is ready! Took ${(result.duration_ms / 1000).toFixed(1)} seconds.`,
+        [
+          { text: 'View 2D', onPress: () => setShow3DModel(false) },
+          { text: 'View 3D', onPress: () => setShow3DModel(true) }
+        ]
       );
     } else if (transformError) {
       console.error('Transform failed:', transformError);
@@ -248,6 +274,7 @@ export default function HomeScreen() {
   const resetImage = () => {
     console.log('Resetting image');
     setImageUri(null);
+    setImageBase64(null);
     setTransformedImageUri(null);
     setSelectedFilters([]);
     setImageSize({ width: 0, height: 0 });
@@ -256,6 +283,9 @@ export default function HomeScreen() {
     setImageError(false);
     setUseAiTransform(false);
     setShowPreview(true);
+    setShow3DModel(false);
+    setModelUrl(null);
+    setTexturedModelUrl(null);
   };
 
   const shareImage = async () => {
@@ -421,6 +451,28 @@ export default function HomeScreen() {
                   <Text style={styles.buttonText}>Try Another Photo</Text>
                 </TouchableOpacity>
               </View>
+            ) : show3DModel && texturedModelUrl ? (
+              <React.Fragment>
+                <Model3DViewer
+                  modelUrl={texturedModelUrl}
+                  thumbnailUrl={transformedImageUri || undefined}
+                  width={containerWidth || 300}
+                  height={CONTAINER_HEIGHT}
+                  loading={transforming}
+                />
+                <TouchableOpacity
+                  style={styles.viewToggle}
+                  onPress={() => setShow3DModel(false)}
+                >
+                  <IconSymbol
+                    ios_icon_name="photo.fill"
+                    android_material_icon_name="image"
+                    size={20}
+                    color={colors.card}
+                  />
+                  <Text style={styles.viewToggleText}>Switch to 2D</Text>
+                </TouchableOpacity>
+              </React.Fragment>
             ) : (
               <React.Fragment>
                 <Image
@@ -430,7 +482,22 @@ export default function HomeScreen() {
                   onLoad={handleImageLoad}
                   onError={handleImageError}
                 />
-                
+
+                {texturedModelUrl && !show3DModel && (
+                  <TouchableOpacity
+                    style={styles.viewToggle}
+                    onPress={() => setShow3DModel(true)}
+                  >
+                    <IconSymbol
+                      ios_icon_name="cube"
+                      android_material_icon_name="view_in_ar"
+                      size={20}
+                      color={colors.card}
+                    />
+                    <Text style={styles.viewToggleText}>View in 3D</Text>
+                  </TouchableOpacity>
+                )}
+
                 {showPreview && !useAiTransform && imageSize.width > 0 && imageSize.height > 0 && (
                   <View 
                     style={[
@@ -883,6 +950,24 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 12,
     width: '100%',
+  },
+  viewToggle: {
+    position: 'absolute',
+    bottom: 12,
+    left: 12,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    zIndex: 15,
+  },
+  viewToggleText: {
+    color: colors.card,
+    fontSize: 14,
+    fontWeight: '600',
   },
   footer: {
     alignItems: 'center',
