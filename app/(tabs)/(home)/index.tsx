@@ -34,11 +34,15 @@ const christmasFilters: ChristmasFilter[] = [
   { id: 'frame', name: 'Frame', icon: '🎄', description: 'Christmas frame' },
 ];
 
+const CONTAINER_HEIGHT = 400;
+
 export default function HomeScreen() {
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [selectedFilters, setSelectedFilters] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [imageSize, setImageSize] = useState({ width: 0, height: 0 });
+  const [containerWidth, setContainerWidth] = useState(0);
+  const [originalImageSize, setOriginalImageSize] = useState({ width: 0, height: 0 });
   const [imageError, setImageError] = useState(false);
 
   const requestPermissions = async () => {
@@ -60,6 +64,31 @@ export default function HomeScreen() {
       Alert.alert('Error', 'Failed to request camera permissions.');
       return false;
     }
+  };
+
+  const calculateDisplayedImageSize = (
+    originalWidth: number,
+    originalHeight: number,
+    containerWidth: number,
+    containerHeight: number
+  ) => {
+    const imageAspectRatio = originalWidth / originalHeight;
+    const containerAspectRatio = containerWidth / containerHeight;
+
+    let displayWidth, displayHeight;
+
+    if (imageAspectRatio > containerAspectRatio) {
+      // Image is wider than container
+      displayWidth = containerWidth;
+      displayHeight = containerWidth / imageAspectRatio;
+    } else {
+      // Image is taller than container
+      displayHeight = containerHeight;
+      displayWidth = containerHeight * imageAspectRatio;
+    }
+
+    console.log('Calculated display size:', { displayWidth, displayHeight });
+    return { width: displayWidth, height: displayHeight };
   };
 
   const takePhoto = async () => {
@@ -91,9 +120,13 @@ export default function HomeScreen() {
       }
 
       if (result.assets && result.assets.length > 0 && result.assets[0].uri) {
-        const uri = result.assets[0].uri;
+        const asset = result.assets[0];
+        const uri = asset.uri;
         console.log('Photo captured successfully:', uri);
+        console.log('Original image dimensions:', asset.width, asset.height);
+        
         setImageUri(uri);
+        setOriginalImageSize({ width: asset.width, height: asset.height });
         setSelectedFilters([]);
         setImageSize({ width: 0, height: 0 });
       } else {
@@ -132,9 +165,13 @@ export default function HomeScreen() {
       }
 
       if (result.assets && result.assets.length > 0 && result.assets[0].uri) {
-        const uri = result.assets[0].uri;
+        const asset = result.assets[0];
+        const uri = asset.uri;
         console.log('Image selected successfully:', uri);
+        console.log('Original image dimensions:', asset.width, asset.height);
+        
         setImageUri(uri);
+        setOriginalImageSize({ width: asset.width, height: asset.height });
         setSelectedFilters([]);
         setImageSize({ width: 0, height: 0 });
       } else {
@@ -166,6 +203,8 @@ export default function HomeScreen() {
     setImageUri(null);
     setSelectedFilters([]);
     setImageSize({ width: 0, height: 0 });
+    setOriginalImageSize({ width: 0, height: 0 });
+    setContainerWidth(0);
     setImageError(false);
   };
 
@@ -196,10 +235,18 @@ export default function HomeScreen() {
   };
 
   const handleImageLayout = (event: any) => {
-    const { width, height } = event.nativeEvent.layout;
-    console.log('Image layout:', width, height);
-    if (width > 0 && height > 0) {
-      setImageSize({ width, height });
+    const { width } = event.nativeEvent.layout;
+    console.log('Container layout width:', width);
+    
+    if (width > 0 && originalImageSize.width > 0 && originalImageSize.height > 0) {
+      setContainerWidth(width);
+      const displaySize = calculateDisplayedImageSize(
+        originalImageSize.width,
+        originalImageSize.height,
+        width,
+        CONTAINER_HEIGHT
+      );
+      setImageSize(displaySize);
     }
   };
 
@@ -212,12 +259,6 @@ export default function HomeScreen() {
   const handleImageLoad = (event: any) => {
     console.log('Image loaded successfully');
     setImageError(false);
-    
-    // Get actual image dimensions from the load event
-    if (event?.nativeEvent?.source) {
-      const { width, height } = event.nativeEvent.source;
-      console.log('Image natural dimensions:', width, height);
-    }
   };
 
   return (
@@ -313,33 +354,45 @@ export default function HomeScreen() {
               </View>
             ) : (
               <React.Fragment>
-                <Image
-                  source={{ uri: imageUri }}
-                  style={styles.image}
-                  resizeMode="contain"
-                  onLoad={handleImageLoad}
-                  onError={handleImageError}
-                />
-                
-                {imageSize.width > 0 && imageSize.height > 0 && (
-                  <View style={styles.overlaysContainer}>
-                    {selectedFilters.includes('frame') && (
-                      <FrameOverlay imageWidth={imageSize.width} imageHeight={imageSize.height} />
-                    )}
-                    
-                    {selectedFilters.includes('santa') && (
-                      <SantaHatOverlay imageWidth={imageSize.width} imageHeight={imageSize.height} />
-                    )}
-                    
-                    {selectedFilters.includes('lights') && (
-                      <LightsOverlay imageWidth={imageSize.width} imageHeight={imageSize.height} />
-                    )}
-                    
-                    {selectedFilters.includes('snow') && (
-                      <SnowOverlay imageWidth={imageSize.width} imageHeight={imageSize.height} />
-                    )}
-                  </View>
-                )}
+                <View style={styles.imageContentWrapper}>
+                  <Image
+                    source={{ uri: imageUri }}
+                    style={styles.image}
+                    resizeMode="contain"
+                    onLoad={handleImageLoad}
+                    onError={handleImageError}
+                  />
+                  
+                  {imageSize.width > 0 && imageSize.height > 0 && (
+                    <View 
+                      style={[
+                        styles.overlaysContainer,
+                        {
+                          width: imageSize.width,
+                          height: imageSize.height,
+                          left: (containerWidth - imageSize.width) / 2,
+                          top: (CONTAINER_HEIGHT - imageSize.height) / 2,
+                        }
+                      ]}
+                    >
+                      {selectedFilters.includes('frame') && (
+                        <FrameOverlay imageWidth={imageSize.width} imageHeight={imageSize.height} />
+                      )}
+                      
+                      {selectedFilters.includes('santa') && (
+                        <SantaHatOverlay imageWidth={imageSize.width} imageHeight={imageSize.height} />
+                      )}
+                      
+                      {selectedFilters.includes('lights') && (
+                        <LightsOverlay imageWidth={imageSize.width} imageHeight={imageSize.height} />
+                      )}
+                      
+                      {selectedFilters.includes('snow') && (
+                        <SnowOverlay imageWidth={imageSize.width} imageHeight={imageSize.height} />
+                      )}
+                    </View>
+                  )}
+                </View>
               </React.Fragment>
             )}
           </View>
@@ -503,7 +556,7 @@ const styles = StyleSheet.create({
   },
   imageWrapper: {
     width: '100%',
-    height: 400,
+    height: CONTAINER_HEIGHT,
     borderRadius: 16,
     overflow: 'hidden',
     backgroundColor: colors.card,
@@ -512,12 +565,17 @@ const styles = StyleSheet.create({
     elevation: 5,
     position: 'relative',
   },
+  imageContentWrapper: {
+    width: '100%',
+    height: '100%',
+    position: 'relative',
+  },
   image: {
     width: '100%',
     height: '100%',
   },
   overlaysContainer: {
-    ...StyleSheet.absoluteFillObject,
+    position: 'absolute',
     pointerEvents: 'none',
   },
   errorContainer: {
