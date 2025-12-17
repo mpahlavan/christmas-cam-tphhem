@@ -8,6 +8,13 @@ interface FrameOverlayProps {
 }
 
 export const FrameOverlay: React.FC<FrameOverlayProps> = ({ imageWidth, imageHeight }) => {
+  if (imageWidth === 0 || imageHeight === 0) {
+    console.log('FrameOverlay: Not rendering, dimensions are 0');
+    return null;
+  }
+
+  console.log('FrameOverlay: Rendering for dimensions:', imageWidth, imageHeight);
+
   return (
     <View style={styles.container} pointerEvents="none">
       {/* Top border with decorations */}
@@ -52,6 +59,7 @@ export const FrameOverlay: React.FC<FrameOverlayProps> = ({ imageWidth, imageHei
 const styles = StyleSheet.create({
   container: {
     ...StyleSheet.absoluteFillObject,
+    zIndex: 1,
   },
   border: {
     position: 'absolute',
@@ -64,45 +72,45 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    height: 40,
-    borderBottomWidth: 2,
+    height: 45,
+    borderBottomWidth: 3,
     borderBottomColor: '#FFD700',
   },
   bottomBorder: {
     bottom: 0,
     left: 0,
     right: 0,
-    height: 40,
-    borderTopWidth: 2,
+    height: 45,
+    borderTopWidth: 3,
     borderTopColor: '#FFD700',
   },
   leftBorder: {
-    top: 40,
-    bottom: 40,
+    top: 45,
+    bottom: 45,
     left: 0,
-    width: 40,
+    width: 45,
     flexDirection: 'column',
-    borderRightWidth: 2,
+    borderRightWidth: 3,
     borderRightColor: '#FFD700',
   },
   rightBorder: {
-    top: 40,
-    bottom: 40,
+    top: 45,
+    bottom: 45,
     right: 0,
-    width: 40,
+    width: 45,
     flexDirection: 'column',
-    borderLeftWidth: 2,
+    borderLeftWidth: 3,
     borderLeftColor: '#FFD700',
   },
   decoration: {
-    fontSize: 24,
+    fontSize: 26,
   },
   decorationVertical: {
-    fontSize: 20,
+    fontSize: 22,
   },
   corner: {
     position: 'absolute',
-    fontSize: 32,
+    fontSize: 36,
   },
   topLeft: {
     top: 4,

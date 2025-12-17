@@ -19,40 +19,62 @@ export const LightsOverlay: React.FC<LightsOverlayProps> = ({ imageWidth, imageH
   const [lights, setLights] = useState<Light[]>([]);
 
   useEffect(() => {
-    const colors = ['#FF0000', '#00FF00', '#0000FF', '#FFFF00', '#FF00FF', '#00FFFF'];
+    if (imageWidth === 0 || imageHeight === 0) {
+      console.log('LightsOverlay: Invalid dimensions, skipping');
+      return;
+    }
+
+    console.log('LightsOverlay: Creating lights for dimensions:', imageWidth, imageHeight);
+
+    const colors = ['#FF0000', '#00FF00', '#0000FF', '#FFFF00', '#FF00FF', '#00FFFF', '#FFA500'];
     const lightsList: Light[] = [];
 
     // Create lights along the top edge
-    const numLights = 8;
+    const numLights = 10;
     for (let i = 0; i < numLights; i++) {
       const animatedValue = new Animated.Value(0);
       lightsList.push({
         id: i,
-        x: (imageWidth / (numLights - 1)) * i,
-        y: 10,
+        x: (imageWidth / (numLights + 1)) * (i + 1),
+        y: 15,
         color: colors[i % colors.length],
         animatedValue,
       });
 
-      // Animate blinking
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(animatedValue, {
-            toValue: 1,
-            duration: 500,
-            useNativeDriver: true,
-          }),
-          Animated.timing(animatedValue, {
-            toValue: 0.3,
-            duration: 500,
-            useNativeDriver: true,
-          }),
-        ])
-      ).start();
+      // Animate blinking with staggered start
+      setTimeout(() => {
+        Animated.loop(
+          Animated.sequence([
+            Animated.timing(animatedValue, {
+              toValue: 1,
+              duration: 600,
+              useNativeDriver: true,
+            }),
+            Animated.timing(animatedValue, {
+              toValue: 0.3,
+              duration: 600,
+              useNativeDriver: true,
+            }),
+          ])
+        ).start();
+      }, i * 100);
     }
 
     setLights(lightsList);
-  }, [imageWidth]);
+
+    return () => {
+      lightsList.forEach(light => {
+        light.animatedValue.stopAnimation();
+      });
+    };
+  }, [imageWidth, imageHeight]);
+
+  if (imageWidth === 0 || imageHeight === 0) {
+    console.log('LightsOverlay: Not rendering, dimensions are 0');
+    return null;
+  }
+
+  console.log('LightsOverlay: Rendering with', lights.length, 'lights');
 
   return (
     <View style={styles.container} pointerEvents="none">
@@ -62,7 +84,7 @@ export const LightsOverlay: React.FC<LightsOverlayProps> = ({ imageWidth, imageH
           style={[
             styles.light,
             {
-              left: light.x - 8,
+              left: light.x - 10,
               top: light.y,
               backgroundColor: light.color,
               opacity: light.animatedValue,
@@ -77,13 +99,14 @@ export const LightsOverlay: React.FC<LightsOverlayProps> = ({ imageWidth, imageH
 const styles = StyleSheet.create({
   container: {
     ...StyleSheet.absoluteFillObject,
+    zIndex: 2,
   },
   light: {
     position: 'absolute',
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    boxShadow: '0px 0px 10px rgba(255, 255, 255, 0.8)',
-    elevation: 5,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    boxShadow: '0px 0px 15px rgba(255, 255, 255, 0.9)',
+    elevation: 8,
   },
 });

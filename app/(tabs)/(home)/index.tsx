@@ -246,6 +246,7 @@ export default function HomeScreen() {
         width,
         CONTAINER_HEIGHT
       );
+      console.log('Setting image size:', displaySize);
       setImageSize(displaySize);
     }
   };
@@ -354,45 +355,43 @@ export default function HomeScreen() {
               </View>
             ) : (
               <React.Fragment>
-                <View style={styles.imageContentWrapper}>
-                  <Image
-                    source={{ uri: imageUri }}
-                    style={styles.image}
-                    resizeMode="contain"
-                    onLoad={handleImageLoad}
-                    onError={handleImageError}
-                  />
-                  
-                  {imageSize.width > 0 && imageSize.height > 0 && (
-                    <View 
-                      style={[
-                        styles.overlaysContainer,
-                        {
-                          width: imageSize.width,
-                          height: imageSize.height,
-                          left: (containerWidth - imageSize.width) / 2,
-                          top: (CONTAINER_HEIGHT - imageSize.height) / 2,
-                        }
-                      ]}
-                    >
-                      {selectedFilters.includes('frame') && (
-                        <FrameOverlay imageWidth={imageSize.width} imageHeight={imageSize.height} />
-                      )}
-                      
-                      {selectedFilters.includes('santa') && (
-                        <SantaHatOverlay imageWidth={imageSize.width} imageHeight={imageSize.height} />
-                      )}
-                      
-                      {selectedFilters.includes('lights') && (
-                        <LightsOverlay imageWidth={imageSize.width} imageHeight={imageSize.height} />
-                      )}
-                      
-                      {selectedFilters.includes('snow') && (
-                        <SnowOverlay imageWidth={imageSize.width} imageHeight={imageSize.height} />
-                      )}
-                    </View>
-                  )}
-                </View>
+                <Image
+                  source={{ uri: imageUri }}
+                  style={styles.image}
+                  resizeMode="contain"
+                  onLoad={handleImageLoad}
+                  onError={handleImageError}
+                />
+                
+                {imageSize.width > 0 && imageSize.height > 0 && (
+                  <View 
+                    style={[
+                      styles.overlaysContainer,
+                      {
+                        width: imageSize.width,
+                        height: imageSize.height,
+                        left: (containerWidth - imageSize.width) / 2,
+                        top: (CONTAINER_HEIGHT - imageSize.height) / 2,
+                      }
+                    ]}
+                  >
+                    {selectedFilters.includes('frame') && (
+                      <FrameOverlay imageWidth={imageSize.width} imageHeight={imageSize.height} />
+                    )}
+                    
+                    {selectedFilters.includes('santa') && (
+                      <SantaHatOverlay imageWidth={imageSize.width} imageHeight={imageSize.height} />
+                    )}
+                    
+                    {selectedFilters.includes('lights') && (
+                      <LightsOverlay imageWidth={imageSize.width} imageHeight={imageSize.height} />
+                    )}
+                    
+                    {selectedFilters.includes('snow') && (
+                      <SnowOverlay imageWidth={imageSize.width} imageHeight={imageSize.height} />
+                    )}
+                  </View>
+                )}
               </React.Fragment>
             )}
           </View>
@@ -565,18 +564,15 @@ const styles = StyleSheet.create({
     elevation: 5,
     position: 'relative',
   },
-  imageContentWrapper: {
-    width: '100%',
-    height: '100%',
-    position: 'relative',
-  },
   image: {
     width: '100%',
     height: '100%',
+    zIndex: 1,
   },
   overlaysContainer: {
     position: 'absolute',
     pointerEvents: 'none',
+    zIndex: 10,
   },
   errorContainer: {
     flex: 1,
