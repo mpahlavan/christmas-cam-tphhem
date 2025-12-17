@@ -10,7 +10,6 @@ import {
   ActivityIndicator,
   Alert,
   Platform,
-  Dimensions,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as Sharing from 'expo-sharing';
@@ -40,19 +39,27 @@ export default function HomeScreen() {
   const [selectedFilters, setSelectedFilters] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [imageSize, setImageSize] = useState({ width: 0, height: 0 });
+  const [imageError, setImageError] = useState(false);
 
   const requestPermissions = async () => {
     console.log('Requesting camera permissions...');
-    const { status } = await ImagePicker.requestCameraPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert(
-        'Permission Required',
-        'Camera permission is required to take photos.',
-        [{ text: 'OK' }]
-      );
+    try {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      console.log('Camera permission status:', status);
+      if (status !== 'granted') {
+        Alert.alert(
+          'Permission Required',
+          'Camera permission is required to take photos.',
+          [{ text: 'OK' }]
+        );
+        return false;
+      }
+      return true;
+    } catch (error) {
+      console.error('Error requesting camera permissions:', error);
+      Alert.alert('Error', 'Failed to request camera permissions.');
       return false;
     }
-    return true;
   };
 
   const takePhoto = async () => {
@@ -65,6 +72,9 @@ export default function HomeScreen() {
 
     try {
       setLoading(true);
+      setImageError(false);
+      
+      console.log('Launching camera...');
       const result = await ImagePicker.launchCameraAsync({
         mediaTypes: ['images'],
         allowsEditing: true,
@@ -72,15 +82,25 @@ export default function HomeScreen() {
         quality: 1,
       });
 
-      console.log('Camera result:', result);
+      console.log('Camera result:', JSON.stringify(result, null, 2));
 
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        setImageUri(result.assets[0].uri);
-        console.log('Photo captured:', result.assets[0].uri);
+      if (result.canceled) {
+        console.log('User canceled camera');
+        return;
+      }
+
+      if (result.assets && result.assets.length > 0 && result.assets[0].uri) {
+        const uri = result.assets[0].uri;
+        console.log('Photo captured successfully:', uri);
+        setImageUri(uri);
+        setSelectedFilters([]);
+      } else {
+        console.error('No image URI in result:', result);
+        Alert.alert('Error', 'Failed to capture photo. Please try again.');
       }
     } catch (error) {
       console.error('Error taking photo:', error);
-      Alert.alert('Error', 'Failed to take photo. Please try again.');
+      Alert.alert('Error', `Failed to take photo: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setLoading(false);
     }
@@ -90,6 +110,9 @@ export default function HomeScreen() {
     console.log('Picking image from library...');
     try {
       setLoading(true);
+      setImageError(false);
+      
+      console.log('Launching image library...');
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
         allowsEditing: true,
@@ -97,15 +120,25 @@ export default function HomeScreen() {
         quality: 1,
       });
 
-      console.log('Image picker result:', result);
+      console.log('Image picker result:', JSON.stringify(result, null, 2));
 
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        setImageUri(result.assets[0].uri);
-        console.log('Image selected:', result.assets[0].uri);
+      if (result.canceled) {
+        console.log('User canceled image picker');
+        return;
+      }
+
+      if (result.assets && result.assets.length > 0 && result.assets[0].uri) {
+        const uri = result.assets[0].uri;
+        console.log('Image selected successfully:', uri);
+        setImageUri(uri);
+        setSelectedFilters([]);
+      } else {
+        console.error('No image URI in result:', result);
+        Alert.alert('Error', 'Failed to select image. Please try again.');
       }
     } catch (error) {
       console.error('Error picking image:', error);
-      Alert.alert('Error', 'Failed to pick image. Please try again.');
+      Alert.alert('Error', `Failed to pick image: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setLoading(false);
     }
@@ -115,10 +148,8 @@ export default function HomeScreen() {
     console.log('Toggling filter:', filterId);
     setSelectedFilters((prev) => {
       if (prev.includes(filterId)) {
-        // Remove filter
         return prev.filter((id) => id !== filterId);
       } else {
-        // Add filter
         return [...prev, filterId];
       }
     });
@@ -128,6 +159,8 @@ export default function HomeScreen() {
     console.log('Resetting image');
     setImageUri(null);
     setSelectedFilters([]);
+    setImageSize({ width: 0, height: 0 });
+    setImageError(false);
   };
 
   const shareImage = async () => {
@@ -159,7 +192,20 @@ export default function HomeScreen() {
   const handleImageLayout = (event: any) => {
     const { width, height } = event.nativeEvent.layout;
     console.log('Image layout:', width, height);
-    setImageSize({ width, height });
+    if (width > 0 && height > 0) {
+      setImageSize({ width, height });
+    }
+  };
+
+  const handleImageError = (error: any) => {
+    console.error('Image loading error:', error);
+    setImageError(true);
+    Alert.alert('Error', 'Failed to load image. Please try again.');
+  };
+
+  const handleImageLoad = () => {
+    console.log('Image loaded successfully');
+    setImageError(false);
   };
 
   return (
@@ -234,81 +280,114 @@ export default function HomeScreen() {
       ) : (
         <View style={styles.imageContainer}>
           <View style={styles.imageWrapper} onLayout={handleImageLayout}>
-            <Image source={{ uri: imageUri }} style={styles.image} resizeMode="contain" />
-            
-            {/* Apply selected filters as overlays */}
-            {selectedFilters.includes('frame') && imageSize.width > 0 && (
-              <FrameOverlay imageWidth={imageSize.width} imageHeight={imageSize.height} />
-            )}
-            
-            {selectedFilters.includes('santa') && imageSize.width > 0 && (
-              <SantaHatOverlay imageWidth={imageSize.width} imageHeight={imageSize.height} />
-            )}
-            
-            {selectedFilters.includes('lights') && imageSize.width > 0 && (
-              <LightsOverlay imageWidth={imageSize.width} imageHeight={imageSize.height} />
-            )}
-            
-            {selectedFilters.includes('snow') && (
-              <SnowOverlay />
-            )}
-          </View>
-
-          <View style={styles.filtersSection}>
-            <Text style={styles.sectionTitle}>Choose Christmas Styles (tap to toggle)</Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.filtersContainer}
-            >
-              {christmasFilters.map((filter, index) => (
+            {imageError ? (
+              <View style={styles.errorContainer}>
+                <IconSymbol
+                  ios_icon_name="exclamationmark.triangle.fill"
+                  android_material_icon_name="error"
+                  size={48}
+                  color={colors.textSecondary}
+                />
+                <Text style={styles.errorText}>Failed to load image</Text>
                 <TouchableOpacity
-                  key={index}
-                  style={[
-                    styles.filterCard,
-                    selectedFilters.includes(filter.id) && styles.filterCardSelected,
-                  ]}
-                  onPress={() => toggleFilter(filter.id)}
+                  style={[styles.button, styles.primaryButton, { marginTop: 16 }]}
+                  onPress={resetImage}
                 >
-                  <Text style={styles.filterIcon}>{filter.icon}</Text>
-                  <Text style={styles.filterName}>{filter.name}</Text>
-                  {selectedFilters.includes(filter.id) && (
-                    <View style={styles.checkmark}>
-                      <Text style={styles.checkmarkText}>✓</Text>
-                    </View>
-                  )}
+                  <Text style={styles.buttonText}>Try Again</Text>
                 </TouchableOpacity>
-              ))}
-            </ScrollView>
+              </View>
+            ) : (
+              <React.Fragment>
+                <Image
+                  source={{ uri: imageUri }}
+                  style={styles.image}
+                  resizeMode="contain"
+                  onLoad={handleImageLoad}
+                  onError={handleImageError}
+                />
+                
+                {imageSize.width > 0 && imageSize.height > 0 && (
+                  <React.Fragment>
+                    {selectedFilters.includes('frame') && (
+                      <FrameOverlay imageWidth={imageSize.width} imageHeight={imageSize.height} />
+                    )}
+                    
+                    {selectedFilters.includes('santa') && (
+                      <SantaHatOverlay imageWidth={imageSize.width} imageHeight={imageSize.height} />
+                    )}
+                    
+                    {selectedFilters.includes('lights') && (
+                      <LightsOverlay imageWidth={imageSize.width} imageHeight={imageSize.height} />
+                    )}
+                    
+                    {selectedFilters.includes('snow') && (
+                      <SnowOverlay />
+                    )}
+                  </React.Fragment>
+                )}
+              </React.Fragment>
+            )}
           </View>
 
-          <View style={styles.actionButtons}>
-            <TouchableOpacity
-              style={[styles.button, styles.accentButton]}
-              onPress={shareImage}
-            >
-              <IconSymbol
-                ios_icon_name="square.and.arrow.up.fill"
-                android_material_icon_name="share"
-                size={24}
-                color={colors.text}
-              />
-              <Text style={[styles.buttonText, { color: colors.text }]}>Share</Text>
-            </TouchableOpacity>
+          {!imageError && (
+            <React.Fragment>
+              <View style={styles.filtersSection}>
+                <Text style={styles.sectionTitle}>Choose Christmas Styles</Text>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.filtersContainer}
+                >
+                  {christmasFilters.map((filter, index) => (
+                    <TouchableOpacity
+                      key={index}
+                      style={[
+                        styles.filterCard,
+                        selectedFilters.includes(filter.id) && styles.filterCardSelected,
+                      ]}
+                      onPress={() => toggleFilter(filter.id)}
+                    >
+                      <Text style={styles.filterIcon}>{filter.icon}</Text>
+                      <Text style={styles.filterName}>{filter.name}</Text>
+                      {selectedFilters.includes(filter.id) && (
+                        <View style={styles.checkmark}>
+                          <Text style={styles.checkmarkText}>✓</Text>
+                        </View>
+                      )}
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
 
-            <TouchableOpacity
-              style={[styles.button, styles.resetButton]}
-              onPress={resetImage}
-            >
-              <IconSymbol
-                ios_icon_name="arrow.counterclockwise"
-                android_material_icon_name="refresh"
-                size={24}
-                color={colors.card}
-              />
-              <Text style={styles.buttonText}>New Photo</Text>
-            </TouchableOpacity>
-          </View>
+              <View style={styles.actionButtons}>
+                <TouchableOpacity
+                  style={[styles.button, styles.accentButton]}
+                  onPress={shareImage}
+                >
+                  <IconSymbol
+                    ios_icon_name="square.and.arrow.up.fill"
+                    android_material_icon_name="share"
+                    size={24}
+                    color={colors.text}
+                  />
+                  <Text style={[styles.buttonText, { color: colors.text }]}>Share</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.button, styles.resetButton]}
+                  onPress={resetImage}
+                >
+                  <IconSymbol
+                    ios_icon_name="arrow.counterclockwise"
+                    android_material_icon_name="refresh"
+                    size={24}
+                    color={colors.card}
+                  />
+                  <Text style={styles.buttonText}>New Photo</Text>
+                </TouchableOpacity>
+              </View>
+            </React.Fragment>
+          )}
         </View>
       )}
 
@@ -418,6 +497,18 @@ const styles = StyleSheet.create({
   image: {
     width: '100%',
     height: '100%',
+  },
+  errorContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
+  },
+  errorText: {
+    fontSize: 16,
+    color: colors.textSecondary,
+    marginTop: 12,
+    textAlign: 'center',
   },
   filtersSection: {
     marginBottom: 20,
