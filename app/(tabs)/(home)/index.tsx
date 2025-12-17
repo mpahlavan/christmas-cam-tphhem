@@ -10,10 +10,16 @@ import {
   ActivityIndicator,
   Alert,
   Platform,
+  Dimensions,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import * as Sharing from 'expo-sharing';
 import { colors } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
+import { SnowOverlay } from '@/components/ChristmasFilters/SnowOverlay';
+import { SantaHatOverlay } from '@/components/ChristmasFilters/SantaHatOverlay';
+import { LightsOverlay } from '@/components/ChristmasFilters/LightsOverlay';
+import { FrameOverlay } from '@/components/ChristmasFilters/FrameOverlay';
 
 type ChristmasFilter = {
   id: string;
@@ -31,8 +37,9 @@ const christmasFilters: ChristmasFilter[] = [
 
 export default function HomeScreen() {
   const [imageUri, setImageUri] = useState<string | null>(null);
-  const [selectedFilter, setSelectedFilter] = useState<string | null>(null);
+  const [selectedFilters, setSelectedFilters] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
+  const [imageSize, setImageSize] = useState({ width: 0, height: 0 });
 
   const requestPermissions = async () => {
     console.log('Requesting camera permissions...');
@@ -104,29 +111,55 @@ export default function HomeScreen() {
     }
   };
 
-  const applyFilter = (filterId: string) => {
-    console.log('Applying filter:', filterId);
-    setSelectedFilter(filterId);
-    Alert.alert(
-      'Filter Applied!',
-      `${christmasFilters.find(f => f.id === filterId)?.name} filter has been applied to your photo!`,
-      [{ text: 'OK' }]
-    );
+  const toggleFilter = (filterId: string) => {
+    console.log('Toggling filter:', filterId);
+    setSelectedFilters((prev) => {
+      if (prev.includes(filterId)) {
+        // Remove filter
+        return prev.filter((id) => id !== filterId);
+      } else {
+        // Add filter
+        return [...prev, filterId];
+      }
+    });
   };
 
   const resetImage = () => {
     console.log('Resetting image');
     setImageUri(null);
-    setSelectedFilter(null);
+    setSelectedFilters([]);
   };
 
-  const shareImage = () => {
+  const shareImage = async () => {
     console.log('Sharing image');
-    Alert.alert(
-      'Share Photo',
-      'Your Christmas photo is ready to share!',
-      [{ text: 'OK' }]
-    );
+    if (!imageUri) {
+      console.log('No image to share');
+      return;
+    }
+
+    try {
+      const isAvailable = await Sharing.isAvailableAsync();
+      if (isAvailable) {
+        await Sharing.shareAsync(imageUri, {
+          dialogTitle: 'Share your Christmas photo!',
+        });
+      } else {
+        Alert.alert(
+          'Sharing Not Available',
+          'Sharing is not available on this device.',
+          [{ text: 'OK' }]
+        );
+      }
+    } catch (error) {
+      console.error('Error sharing image:', error);
+      Alert.alert('Error', 'Failed to share image. Please try again.');
+    }
+  };
+
+  const handleImageLayout = (event: any) => {
+    const { width, height } = event.nativeEvent.layout;
+    console.log('Image layout:', width, height);
+    setImageSize({ width, height });
   };
 
   return (
@@ -200,19 +233,29 @@ export default function HomeScreen() {
         </View>
       ) : (
         <View style={styles.imageContainer}>
-          <View style={styles.imageWrapper}>
+          <View style={styles.imageWrapper} onLayout={handleImageLayout}>
             <Image source={{ uri: imageUri }} style={styles.image} resizeMode="contain" />
-            {selectedFilter && (
-              <View style={styles.filterOverlay}>
-                <Text style={styles.filterText}>
-                  {christmasFilters.find(f => f.id === selectedFilter)?.icon}
-                </Text>
-              </View>
+            
+            {/* Apply selected filters as overlays */}
+            {selectedFilters.includes('frame') && imageSize.width > 0 && (
+              <FrameOverlay imageWidth={imageSize.width} imageHeight={imageSize.height} />
+            )}
+            
+            {selectedFilters.includes('santa') && imageSize.width > 0 && (
+              <SantaHatOverlay imageWidth={imageSize.width} imageHeight={imageSize.height} />
+            )}
+            
+            {selectedFilters.includes('lights') && imageSize.width > 0 && (
+              <LightsOverlay imageWidth={imageSize.width} imageHeight={imageSize.height} />
+            )}
+            
+            {selectedFilters.includes('snow') && (
+              <SnowOverlay />
             )}
           </View>
 
           <View style={styles.filtersSection}>
-            <Text style={styles.sectionTitle}>Choose a Christmas Style</Text>
+            <Text style={styles.sectionTitle}>Choose Christmas Styles (tap to toggle)</Text>
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
@@ -223,12 +266,17 @@ export default function HomeScreen() {
                   key={index}
                   style={[
                     styles.filterCard,
-                    selectedFilter === filter.id && styles.filterCardSelected,
+                    selectedFilters.includes(filter.id) && styles.filterCardSelected,
                   ]}
-                  onPress={() => applyFilter(filter.id)}
+                  onPress={() => toggleFilter(filter.id)}
                 >
                   <Text style={styles.filterIcon}>{filter.icon}</Text>
                   <Text style={styles.filterName}>{filter.name}</Text>
+                  {selectedFilters.includes(filter.id) && (
+                    <View style={styles.checkmark}>
+                      <Text style={styles.checkmarkText}>✓</Text>
+                    </View>
+                  )}
                 </TouchableOpacity>
               ))}
             </ScrollView>
@@ -371,17 +419,6 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
-  filterOverlay: {
-    position: 'absolute',
-    top: 10,
-    right: 10,
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    borderRadius: 30,
-    padding: 8,
-  },
-  filterText: {
-    fontSize: 32,
-  },
   filtersSection: {
     marginBottom: 20,
   },
@@ -406,6 +443,7 @@ const styles = StyleSheet.create({
     borderColor: colors.highlight,
     boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.1)',
     elevation: 3,
+    position: 'relative',
   },
   filterCardSelected: {
     borderColor: colors.primary,
@@ -421,6 +459,22 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.text,
     textAlign: 'center',
+  },
+  checkmark: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkmarkText: {
+    color: colors.card,
+    fontSize: 16,
+    fontWeight: 'bold',
   },
   actionButtons: {
     flexDirection: 'row',
