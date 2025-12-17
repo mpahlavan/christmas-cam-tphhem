@@ -19,6 +19,7 @@ import { SnowOverlay } from '@/components/ChristmasFilters/SnowOverlay';
 import { SantaHatOverlay } from '@/components/ChristmasFilters/SantaHatOverlay';
 import { LightsOverlay } from '@/components/ChristmasFilters/LightsOverlay';
 import { FrameOverlay } from '@/components/ChristmasFilters/FrameOverlay';
+import { useChristmasTransform } from '@/hooks/useChristmasTransform';
 
 type ChristmasFilter = {
   id: string;
@@ -38,12 +39,17 @@ const CONTAINER_HEIGHT = 400;
 
 export default function HomeScreen() {
   const [imageUri, setImageUri] = useState<string | null>(null);
+  const [transformedImageUri, setTransformedImageUri] = useState<string | null>(null);
   const [selectedFilters, setSelectedFilters] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [imageSize, setImageSize] = useState({ width: 0, height: 0 });
   const [containerWidth, setContainerWidth] = useState(0);
   const [originalImageSize, setOriginalImageSize] = useState({ width: 0, height: 0 });
   const [imageError, setImageError] = useState(false);
+  const [useAiTransform, setUseAiTransform] = useState(false);
+  const [showPreview, setShowPreview] = useState(true);
+
+  const { transform, loading: transforming, error: transformError } = useChristmasTransform();
 
   const requestPermissions = async () => {
     console.log('Requesting camera permissions...');
@@ -78,11 +84,9 @@ export default function HomeScreen() {
     let displayWidth, displayHeight;
 
     if (imageAspectRatio > containerAspectRatio) {
-      // Image is wider than container
       displayWidth = containerWidth;
       displayHeight = containerWidth / imageAspectRatio;
     } else {
-      // Image is taller than container
       displayHeight = containerHeight;
       displayWidth = containerHeight * imageAspectRatio;
     }
@@ -126,9 +130,12 @@ export default function HomeScreen() {
         console.log('Original image dimensions:', asset.width, asset.height);
         
         setImageUri(uri);
+        setTransformedImageUri(null);
         setOriginalImageSize({ width: asset.width, height: asset.height });
         setSelectedFilters([]);
         setImageSize({ width: 0, height: 0 });
+        setUseAiTransform(false);
+        setShowPreview(true);
       } else {
         console.error('No image URI in result:', result);
         Alert.alert('Error', 'Failed to capture photo. Please try again.');
@@ -171,9 +178,12 @@ export default function HomeScreen() {
         console.log('Original image dimensions:', asset.width, asset.height);
         
         setImageUri(uri);
+        setTransformedImageUri(null);
         setOriginalImageSize({ width: asset.width, height: asset.height });
         setSelectedFilters([]);
         setImageSize({ width: 0, height: 0 });
+        setUseAiTransform(false);
+        setShowPreview(true);
       } else {
         console.error('No image URI in result:', result);
         Alert.alert('Error', 'Failed to select image. Please try again.');
@@ -198,19 +208,60 @@ export default function HomeScreen() {
     });
   };
 
+  const applyAiTransform = async () => {
+    if (!imageUri) {
+      Alert.alert('Error', 'Please select an image first');
+      return;
+    }
+
+    if (selectedFilters.length === 0) {
+      Alert.alert('Info', 'Please select at least one Christmas filter to apply');
+      return;
+    }
+
+    console.log('Applying AI transform with filters:', selectedFilters);
+    const result = await transform({
+      imageUri,
+      filters: selectedFilters,
+    });
+
+    if (result) {
+      console.log('Transform successful, new image URL:', result.url);
+      setTransformedImageUri(result.url);
+      setUseAiTransform(true);
+      setShowPreview(false);
+      Alert.alert(
+        'Success! 🎄',
+        `Your Christmas transformation is ready! Took ${(result.duration_ms / 1000).toFixed(1)} seconds.`,
+        [{ text: 'Awesome!' }]
+      );
+    } else if (transformError) {
+      console.error('Transform failed:', transformError);
+      Alert.alert(
+        'Transform Failed',
+        transformError || 'Failed to apply Christmas transformation. Please try again.',
+        [{ text: 'OK' }]
+      );
+    }
+  };
+
   const resetImage = () => {
     console.log('Resetting image');
     setImageUri(null);
+    setTransformedImageUri(null);
     setSelectedFilters([]);
     setImageSize({ width: 0, height: 0 });
     setOriginalImageSize({ width: 0, height: 0 });
     setContainerWidth(0);
     setImageError(false);
+    setUseAiTransform(false);
+    setShowPreview(true);
   };
 
   const shareImage = async () => {
     console.log('Sharing image');
-    if (!imageUri) {
+    const imageToShare = transformedImageUri || imageUri;
+    if (!imageToShare) {
       console.log('No image to share');
       return;
     }
@@ -218,7 +269,7 @@ export default function HomeScreen() {
     try {
       const isAvailable = await Sharing.isAvailableAsync();
       if (isAvailable) {
-        await Sharing.shareAsync(imageUri, {
+        await Sharing.shareAsync(imageToShare, {
           dialogTitle: 'Share your Christmas photo!',
         });
       } else {
@@ -262,6 +313,8 @@ export default function HomeScreen() {
     setImageError(false);
   };
 
+  const displayImageUri = transformedImageUri || imageUri;
+
   return (
     <ScrollView
       style={styles.container}
@@ -271,7 +324,7 @@ export default function HomeScreen() {
       <View style={styles.header}>
         <Text style={styles.title}>🎄 Christmas Cam 🎄</Text>
         <Text style={styles.subtitle}>
-          Add festive Christmas style to your photos!
+          Transform your photos with AI-powered Christmas magic!
         </Text>
       </View>
 
@@ -287,6 +340,9 @@ export default function HomeScreen() {
           </View>
           <Text style={styles.emptyText}>
             Take a photo or choose from your gallery
+          </Text>
+          <Text style={styles.emptySubtext}>
+            Then select Christmas effects and let AI work its magic! ✨
           </Text>
 
           <View style={styles.buttonGroup}>
@@ -330,6 +386,18 @@ export default function HomeScreen() {
               )}
             </TouchableOpacity>
           </View>
+
+          <View style={styles.infoBox}>
+            <IconSymbol
+              ios_icon_name="info.circle.fill"
+              android_material_icon_name="info"
+              size={20}
+              color={colors.primary}
+            />
+            <Text style={styles.infoText}>
+              Powered by Meshy AI - Real AI transformations, not just overlays!
+            </Text>
+          </View>
         </View>
       ) : (
         <View style={styles.imageContainer}>
@@ -356,14 +424,14 @@ export default function HomeScreen() {
             ) : (
               <React.Fragment>
                 <Image
-                  source={{ uri: imageUri }}
+                  source={{ uri: displayImageUri }}
                   style={styles.image}
                   resizeMode="contain"
                   onLoad={handleImageLoad}
                   onError={handleImageError}
                 />
                 
-                {imageSize.width > 0 && imageSize.height > 0 && (
+                {showPreview && !useAiTransform && imageSize.width > 0 && imageSize.height > 0 && (
                   <View 
                     style={[
                       styles.overlaysContainer,
@@ -390,6 +458,34 @@ export default function HomeScreen() {
                     {selectedFilters.includes('snow') && (
                       <SnowOverlay imageWidth={imageSize.width} imageHeight={imageSize.height} />
                     )}
+
+                    <View style={styles.previewBadge}>
+                      <Text style={styles.previewBadgeText}>Preview</Text>
+                    </View>
+                  </View>
+                )}
+
+                {transforming && (
+                  <View style={styles.transformingOverlay}>
+                    <ActivityIndicator size="large" color={colors.primary} />
+                    <Text style={styles.transformingText}>
+                      ✨ AI is working its magic... ✨
+                    </Text>
+                    <Text style={styles.transformingSubtext}>
+                      This may take 30-60 seconds
+                    </Text>
+                  </View>
+                )}
+
+                {useAiTransform && transformedImageUri && (
+                  <View style={styles.successBadge}>
+                    <IconSymbol
+                      ios_icon_name="checkmark.circle.fill"
+                      android_material_icon_name="check_circle"
+                      size={20}
+                      color="#10B981"
+                    />
+                    <Text style={styles.successBadgeText}>AI Transformed!</Text>
                   </View>
                 )}
               </React.Fragment>
@@ -401,7 +497,9 @@ export default function HomeScreen() {
               <View style={styles.filtersSection}>
                 <Text style={styles.sectionTitle}>Choose Christmas Styles</Text>
                 <Text style={styles.sectionSubtitle}>
-                  Tap to add festive effects to your photo
+                  {useAiTransform 
+                    ? 'Select new effects to transform again'
+                    : 'Select effects and tap "Apply AI Transform"'}
                 </Text>
                 <ScrollView
                   horizontal
@@ -415,7 +513,13 @@ export default function HomeScreen() {
                         styles.filterCard,
                         selectedFilters.includes(filter.id) && styles.filterCardSelected,
                       ]}
-                      onPress={() => toggleFilter(filter.id)}
+                      onPress={() => {
+                        toggleFilter(filter.id);
+                        if (!useAiTransform) {
+                          setShowPreview(true);
+                        }
+                      }}
+                      disabled={transforming}
                     >
                       <Text style={styles.filterIcon}>{filter.icon}</Text>
                       <Text style={styles.filterName}>{filter.name}</Text>
@@ -429,10 +533,40 @@ export default function HomeScreen() {
                 </ScrollView>
               </View>
 
+              <TouchableOpacity
+                style={[
+                  styles.button,
+                  styles.transformButton,
+                  (transforming || selectedFilters.length === 0) && styles.buttonDisabled,
+                ]}
+                onPress={applyAiTransform}
+                disabled={transforming || selectedFilters.length === 0}
+              >
+                {transforming ? (
+                  <React.Fragment>
+                    <ActivityIndicator color={colors.card} />
+                    <Text style={styles.buttonText}>Transforming...</Text>
+                  </React.Fragment>
+                ) : (
+                  <React.Fragment>
+                    <IconSymbol
+                      ios_icon_name="wand.and.stars"
+                      android_material_icon_name="auto_fix_high"
+                      size={24}
+                      color={colors.card}
+                    />
+                    <Text style={styles.buttonText}>
+                      {useAiTransform ? 'Transform Again' : 'Apply AI Transform'}
+                    </Text>
+                  </React.Fragment>
+                )}
+              </TouchableOpacity>
+
               <View style={styles.actionButtons}>
                 <TouchableOpacity
                   style={[styles.button, styles.accentButton]}
                   onPress={shareImage}
+                  disabled={transforming}
                 >
                   <IconSymbol
                     ios_icon_name="square.and.arrow.up.fill"
@@ -446,6 +580,7 @@ export default function HomeScreen() {
                 <TouchableOpacity
                   style={[styles.button, styles.resetButton]}
                   onPress={resetImage}
+                  disabled={transforming}
                 >
                   <IconSymbol
                     ios_icon_name="arrow.counterclockwise"
@@ -463,7 +598,10 @@ export default function HomeScreen() {
 
       <View style={styles.footer}>
         <Text style={styles.footerText}>
-          🎅 Make your holidays magical! 🎁
+          🎅 Make your holidays magical with AI! 🎁
+        </Text>
+        <Text style={styles.footerSubtext}>
+          Powered by Meshy AI
         </Text>
       </View>
     </ScrollView>
@@ -512,13 +650,21 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 18,
+    fontWeight: '600',
     color: colors.text,
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  emptySubtext: {
+    fontSize: 14,
+    color: colors.textSecondary,
     textAlign: 'center',
     marginBottom: 30,
   },
   buttonGroup: {
     width: '100%',
     gap: 12,
+    marginBottom: 20,
   },
   button: {
     flexDirection: 'row',
@@ -545,10 +691,32 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
     flex: 1,
   },
+  transformButton: {
+    backgroundColor: '#9333EA',
+    marginBottom: 12,
+  },
+  buttonDisabled: {
+    opacity: 0.5,
+  },
   buttonText: {
     fontSize: 18,
     fontWeight: '600',
     color: colors.card,
+  },
+  infoBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.highlight,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    gap: 8,
+    marginTop: 10,
+  },
+  infoText: {
+    flex: 1,
+    fontSize: 12,
+    color: colors.textSecondary,
   },
   imageContainer: {
     width: '100%',
@@ -573,6 +741,62 @@ const styles = StyleSheet.create({
     position: 'absolute',
     pointerEvents: 'none',
     zIndex: 10,
+  },
+  previewBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    paddingVertical: 4,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+  },
+  previewBadgeText: {
+    color: colors.card,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  successBadge: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    backgroundColor: 'rgba(16, 185, 129, 0.9)',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    zIndex: 15,
+  },
+  successBadgeText: {
+    color: colors.card,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  transformingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 20,
+  },
+  transformingText: {
+    color: colors.card,
+    fontSize: 18,
+    fontWeight: '600',
+    marginTop: 16,
+    textAlign: 'center',
+  },
+  transformingSubtext: {
+    color: colors.textSecondary,
+    fontSize: 14,
+    marginTop: 8,
+    textAlign: 'center',
   },
   errorContainer: {
     flex: 1,
@@ -667,6 +891,12 @@ const styles = StyleSheet.create({
   },
   footerText: {
     fontSize: 16,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+  footerSubtext: {
+    fontSize: 12,
     color: colors.textSecondary,
     textAlign: 'center',
   },
