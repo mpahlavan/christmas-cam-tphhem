@@ -1,6 +1,11 @@
 
 import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, Animated, Dimensions } from 'react-native';
+import { View, StyleSheet, Animated } from 'react-native';
+
+interface SnowOverlayProps {
+  imageWidth: number;
+  imageHeight: number;
+}
 
 interface Snowflake {
   id: number;
@@ -10,18 +15,24 @@ interface Snowflake {
   speed: number;
 }
 
-export const SnowOverlay: React.FC = () => {
+export const SnowOverlay: React.FC<SnowOverlayProps> = ({ imageWidth, imageHeight }) => {
   const [snowflakes, setSnowflakes] = useState<Snowflake[]>([]);
-  const { width, height } = Dimensions.get('window');
 
   useEffect(() => {
+    if (imageWidth === 0 || imageHeight === 0) {
+      console.log('SnowOverlay: Invalid dimensions, skipping animation');
+      return;
+    }
+
+    console.log('SnowOverlay: Creating snowflakes for dimensions:', imageWidth, imageHeight);
+    
     // Create 20 snowflakes
     const flakes: Snowflake[] = [];
     for (let i = 0; i < 20; i++) {
       const animatedValue = new Animated.Value(0);
       flakes.push({
         id: i,
-        x: Math.random() * width,
+        x: Math.random() * imageWidth,
         animatedValue,
         size: Math.random() * 8 + 4,
         speed: Math.random() * 3000 + 2000,
@@ -37,14 +48,25 @@ export const SnowOverlay: React.FC = () => {
       ).start();
     }
     setSnowflakes(flakes);
-  }, [width]);
+
+    // Cleanup function to stop animations
+    return () => {
+      flakes.forEach(flake => {
+        flake.animatedValue.stopAnimation();
+      });
+    };
+  }, [imageWidth, imageHeight]);
+
+  if (imageWidth === 0 || imageHeight === 0) {
+    return null;
+  }
 
   return (
-    <View style={styles.container} pointerEvents="none">
+    <View style={[styles.container, { width: imageWidth, height: imageHeight }]} pointerEvents="none">
       {snowflakes.map((flake) => {
         const translateY = flake.animatedValue.interpolate({
           inputRange: [0, 1],
-          outputRange: [-20, height + 20],
+          outputRange: [-20, imageHeight + 20],
         });
 
         const translateX = flake.animatedValue.interpolate({
@@ -73,7 +95,9 @@ export const SnowOverlay: React.FC = () => {
 
 const styles = StyleSheet.create({
   container: {
-    ...StyleSheet.absoluteFillObject,
+    position: 'absolute',
+    top: 0,
+    left: 0,
     overflow: 'hidden',
   },
   snowflake: {

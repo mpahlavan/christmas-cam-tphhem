@@ -86,6 +86,7 @@ export default function HomeScreen() {
 
       if (result.canceled) {
         console.log('User canceled camera');
+        setLoading(false);
         return;
       }
 
@@ -94,6 +95,7 @@ export default function HomeScreen() {
         console.log('Photo captured successfully:', uri);
         setImageUri(uri);
         setSelectedFilters([]);
+        setImageSize({ width: 0, height: 0 });
       } else {
         console.error('No image URI in result:', result);
         Alert.alert('Error', 'Failed to capture photo. Please try again.');
@@ -101,6 +103,7 @@ export default function HomeScreen() {
     } catch (error) {
       console.error('Error taking photo:', error);
       Alert.alert('Error', `Failed to take photo: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      setImageError(true);
     } finally {
       setLoading(false);
     }
@@ -124,6 +127,7 @@ export default function HomeScreen() {
 
       if (result.canceled) {
         console.log('User canceled image picker');
+        setLoading(false);
         return;
       }
 
@@ -132,6 +136,7 @@ export default function HomeScreen() {
         console.log('Image selected successfully:', uri);
         setImageUri(uri);
         setSelectedFilters([]);
+        setImageSize({ width: 0, height: 0 });
       } else {
         console.error('No image URI in result:', result);
         Alert.alert('Error', 'Failed to select image. Please try again.');
@@ -139,6 +144,7 @@ export default function HomeScreen() {
     } catch (error) {
       console.error('Error picking image:', error);
       Alert.alert('Error', `Failed to pick image: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      setImageError(true);
     } finally {
       setLoading(false);
     }
@@ -200,12 +206,18 @@ export default function HomeScreen() {
   const handleImageError = (error: any) => {
     console.error('Image loading error:', error);
     setImageError(true);
-    Alert.alert('Error', 'Failed to load image. Please try again.');
+    Alert.alert('Error', 'Failed to load image. Please try selecting a different photo.');
   };
 
-  const handleImageLoad = () => {
+  const handleImageLoad = (event: any) => {
     console.log('Image loaded successfully');
     setImageError(false);
+    
+    // Get actual image dimensions from the load event
+    if (event?.nativeEvent?.source) {
+      const { width, height } = event.nativeEvent.source;
+      console.log('Image natural dimensions:', width, height);
+    }
   };
 
   return (
@@ -289,11 +301,14 @@ export default function HomeScreen() {
                   color={colors.textSecondary}
                 />
                 <Text style={styles.errorText}>Failed to load image</Text>
+                <Text style={styles.errorSubtext}>
+                  The image might be corrupted or in an unsupported format.
+                </Text>
                 <TouchableOpacity
                   style={[styles.button, styles.primaryButton, { marginTop: 16 }]}
                   onPress={resetImage}
                 >
-                  <Text style={styles.buttonText}>Try Again</Text>
+                  <Text style={styles.buttonText}>Try Another Photo</Text>
                 </TouchableOpacity>
               </View>
             ) : (
@@ -307,7 +322,7 @@ export default function HomeScreen() {
                 />
                 
                 {imageSize.width > 0 && imageSize.height > 0 && (
-                  <React.Fragment>
+                  <View style={styles.overlaysContainer}>
                     {selectedFilters.includes('frame') && (
                       <FrameOverlay imageWidth={imageSize.width} imageHeight={imageSize.height} />
                     )}
@@ -321,9 +336,9 @@ export default function HomeScreen() {
                     )}
                     
                     {selectedFilters.includes('snow') && (
-                      <SnowOverlay />
+                      <SnowOverlay imageWidth={imageSize.width} imageHeight={imageSize.height} />
                     )}
-                  </React.Fragment>
+                  </View>
                 )}
               </React.Fragment>
             )}
@@ -333,6 +348,9 @@ export default function HomeScreen() {
             <React.Fragment>
               <View style={styles.filtersSection}>
                 <Text style={styles.sectionTitle}>Choose Christmas Styles</Text>
+                <Text style={styles.sectionSubtitle}>
+                  Tap to add festive effects to your photo
+                </Text>
                 <ScrollView
                   horizontal
                   showsHorizontalScrollIndicator={false}
@@ -498,6 +516,10 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
+  overlaysContainer: {
+    ...StyleSheet.absoluteFillObject,
+    pointerEvents: 'none',
+  },
   errorContainer: {
     flex: 1,
     alignItems: 'center',
@@ -505,9 +527,16 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   errorText: {
-    fontSize: 16,
-    color: colors.textSecondary,
+    fontSize: 18,
+    fontWeight: '600',
+    color: colors.text,
     marginTop: 12,
+    textAlign: 'center',
+  },
+  errorSubtext: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    marginTop: 8,
     textAlign: 'center',
   },
   filtersSection: {
@@ -517,6 +546,11 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: 'bold',
     color: colors.text,
+    marginBottom: 4,
+  },
+  sectionSubtitle: {
+    fontSize: 14,
+    color: colors.textSecondary,
     marginBottom: 12,
   },
   filtersContainer: {
