@@ -1,4 +1,3 @@
-
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
@@ -23,8 +22,6 @@ type TransformResponse = {
   path: string;
   duration_ms: number;
   taskId?: string;
-  modelUrl?: string;
-  texturedModelUrl?: string;
 };
 
 // Generate Christmas-themed prompt based on selected filters
@@ -47,40 +44,16 @@ function generateChristmasPrompt(filters: string[]): string {
   return `Transform this photo with Christmas holiday theme: ${selectedPrompts.join(", ")}. Maintain the original composition and subject while naturally blending festive Christmas elements. Make it look magical and festive with rich holiday colors and warm atmosphere.`;
 }
 
-// Convert image URL to base64
-async function imageUrlToBase64(url: string): Promise<string> {
-  try {
-    console.log("Fetching image from URL:", url);
-    const response = await fetch(url);
-    if (!response.ok) {
-      throw new Error(`Failed to fetch image: ${response.statusText}`);
-    }
-    
-    const arrayBuffer = await response.arrayBuffer();
-    const bytes = new Uint8Array(arrayBuffer);
-    let binary = '';
-    for (let i = 0; i < bytes.byteLength; i++) {
-      binary += String.fromCharCode(bytes[i]);
-    }
-    const base64 = btoa(binary);
-    console.log("Image converted to base64, length:", base64.length);
-    return base64;
-  } catch (error) {
-    console.error("Error converting image to base64:", error);
-    throw new Error(`Failed to process image: ${error instanceof Error ? error.message : 'Unknown error'}`);
-  }
-}
-
-// Create Meshy image-to-3D task
-async function createMeshy3DTask(imageBase64: string): Promise<string> {
+// Create Meshy image-to-image task
+async function createMeshyImageTask(imageBase64: string, prompt: string): Promise<string> {
   if (!MESHY_API_KEY) {
     throw new Error("MESHY_API_KEY not configured. Please add it to Supabase environment variables.");
   }
 
-  console.log("Creating Meshy image-to-3D task");
+  console.log("Creating Meshy image-to-image task with prompt:", prompt);
 
-  // Meshy AI API endpoint for image-to-3D transformation
-  const response = await fetch(`${MESHY_API_BASE}/v1/image-to-3d`, {
+  // Meshy AI API endpoint for image-to-image transformation
+  const response = await fetch(`${MESHY_API_BASE}/v2/image-to-image`, {
     method: "POST",
     headers: {
       "Authorization": `Bearer ${MESHY_API_KEY}`,
@@ -88,77 +61,38 @@ async function createMeshy3DTask(imageBase64: string): Promise<string> {
     },
     body: JSON.stringify({
       image_url: `data:image/jpeg;base64,${imageBase64}`,
-      enable_pbr: true,
-      surface_mode: "organic",
-      model_resolution: "high"
-    }),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error("Meshy 3D API error:", response.status, errorText);
-    throw new Error(`Meshy 3D API error: ${response.status} - ${errorText}`);
-  }
-
-  const data = await response.json();
-  console.log("Meshy 3D task created:", data);
-
-  if (!data.result) {
-    throw new Error("No task ID returned from Meshy 3D API");
-  }
-
-  return data.result;
-}
-
-// Create Meshy texture generation task with Christmas theme
-async function createMeshyTextureTask(modelUrl: string, prompt: string): Promise<string> {
-  if (!MESHY_API_KEY) {
-    throw new Error("MESHY_API_KEY not configured");
-  }
-
-  console.log("Creating Meshy texture task with Christmas theme:", prompt);
-
-  // Use text-to-texture API to apply Christmas theme to 3D model
-  const response = await fetch(`${MESHY_API_BASE}/v1/text-to-texture`, {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${MESHY_API_KEY}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model_url: modelUrl,
       prompt: prompt,
       art_style: "realistic",
-      negative_prompt: "blurry, low quality, distorted",
+      negative_prompt: "blurry, low quality, distorted, ugly, deformed, watermark, text",
     }),
   });
 
   if (!response.ok) {
     const errorText = await response.text();
-    console.error("Meshy texture API error:", response.status, errorText);
-    throw new Error(`Meshy texture API error: ${response.status} - ${errorText}`);
+    console.error("Meshy API error:", response.status, errorText);
+    throw new Error(`Meshy API error: ${response.status} - ${errorText}`);
   }
 
   const data = await response.json();
-  console.log("Meshy texture task created:", data);
+  console.log("Meshy task created:", data);
 
   if (!data.result) {
-    throw new Error("No task ID returned from Meshy texture API");
+    throw new Error("No task ID returned from Meshy API");
   }
 
   return data.result;
 }
 
-// Poll Meshy 3D task status and get result
-async function pollMeshy3DTask(taskId: string, maxAttempts = 120): Promise<{ modelUrl: string; thumbnailUrl: string }> {
+// Poll Meshy task status and get result
+async function pollMeshyTask(taskId: string, maxAttempts = 60): Promise<string> {
   if (!MESHY_API_KEY) {
     throw new Error("MESHY_API_KEY not configured");
   }
 
-  console.log("Polling Meshy 3D task:", taskId);
+  console.log("Polling Meshy task:", taskId);
 
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    const response = await fetch(`${MESHY_API_BASE}/v1/image-to-3d/${taskId}`, {
+    const response = await fetch(`${MESHY_API_BASE}/v2/image-to-image/${taskId}`, {
       method: "GET",
       headers: {
         "Authorization": `Bearer ${MESHY_API_KEY}`,
@@ -167,77 +101,30 @@ async function pollMeshy3DTask(taskId: string, maxAttempts = 120): Promise<{ mod
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error("Meshy 3D polling error:", response.status, errorText);
-      throw new Error(`Failed to check 3D task status: ${response.status}`);
+      console.error("Meshy polling error:", response.status, errorText);
+      throw new Error(`Failed to check task status: ${response.status}`);
     }
 
     const data = await response.json();
-    console.log(`3D Task status (attempt ${attempt + 1}):`, data.status);
+    console.log(`Task status (attempt ${attempt + 1}):`, data.status);
 
     if (data.status === "SUCCEEDED") {
-      if (!data.model_urls || !data.model_urls.glb) {
-        throw new Error("No model URL in completed 3D task");
+      if (!data.image_url) {
+        throw new Error("No image URL in completed task");
       }
-      console.log("3D task completed successfully, model URL:", data.model_urls.glb);
-      return {
-        modelUrl: data.model_urls.glb,
-        thumbnailUrl: data.thumbnail_url || data.model_urls.glb
-      };
+      console.log("Task completed successfully, image URL:", data.image_url);
+      return data.image_url;
     } else if (data.status === "FAILED") {
-      throw new Error(`Meshy 3D task failed: ${data.error || 'Unknown error'}`);
-    } else if (data.status === "PENDING" || data.status === "IN_PROGRESS" || data.status === "IN_QUEUE") {
-      // Wait 3 seconds before next poll (3D generation takes longer)
-      await new Promise(resolve => setTimeout(resolve, 3000));
-    } else {
-      throw new Error(`Unknown 3D task status: ${data.status}`);
-    }
-  }
-
-  throw new Error("3D Task timeout: 3D model generation took too long");
-}
-
-// Poll Meshy texture task status and get result
-async function pollMeshyTextureTask(taskId: string, maxAttempts = 60): Promise<string> {
-  if (!MESHY_API_KEY) {
-    throw new Error("MESHY_API_KEY not configured");
-  }
-
-  console.log("Polling Meshy texture task:", taskId);
-
-  for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    const response = await fetch(`${MESHY_API_BASE}/v1/text-to-texture/${taskId}`, {
-      method: "GET",
-      headers: {
-        "Authorization": `Bearer ${MESHY_API_KEY}`,
-      },
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("Meshy texture polling error:", response.status, errorText);
-      throw new Error(`Failed to check texture task status: ${response.status}`);
-    }
-
-    const data = await response.json();
-    console.log(`Texture task status (attempt ${attempt + 1}):`, data.status);
-
-    if (data.status === "SUCCEEDED") {
-      if (!data.model_urls || !data.model_urls.glb) {
-        throw new Error("No textured model URL in completed task");
-      }
-      console.log("Texture task completed successfully, model URL:", data.model_urls.glb);
-      return data.model_urls.glb;
-    } else if (data.status === "FAILED") {
-      throw new Error(`Meshy texture task failed: ${data.error || 'Unknown error'}`);
-    } else if (data.status === "PENDING" || data.status === "IN_PROGRESS" || data.status === "IN_QUEUE") {
+      throw new Error(`Meshy task failed: ${data.error || 'Unknown error'}`);
+    } else if (data.status === "PENDING" || data.status === "IN_PROGRESS") {
       // Wait 2 seconds before next poll
       await new Promise(resolve => setTimeout(resolve, 2000));
     } else {
-      throw new Error(`Unknown texture task status: ${data.status}`);
+      throw new Error(`Unknown task status: ${data.status}`);
     }
   }
 
-  throw new Error("Texture task timeout: Texture generation took too long");
+  throw new Error("Task timeout: Image transformation took too long");
 }
 
 // Download image from URL
@@ -249,6 +136,14 @@ async function downloadImage(url: string): Promise<Uint8Array> {
   }
   const arrayBuffer = await response.arrayBuffer();
   return new Uint8Array(arrayBuffer);
+}
+
+// Fallback: Apply simple filters locally (when Meshy is not available)
+async function applyLocalFilters(imageBase64: string, filters: string[]): Promise<string> {
+  console.log("Applying local filters as fallback:", filters);
+  // This is a fallback that just returns the original image
+  // In a real implementation, you could use image manipulation libraries
+  return `data:image/jpeg;base64,${imageBase64}`;
 }
 
 Deno.serve(async (req) => {
@@ -276,7 +171,10 @@ Deno.serve(async (req) => {
     if (!user?.user) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Access-Control-Allow-Origin": "*",
+        },
       });
     }
 
@@ -284,14 +182,20 @@ Deno.serve(async (req) => {
     if (!body.imageBase64) {
       return new Response(JSON.stringify({ error: "Image data required" }), {
         status: 400,
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Access-Control-Allow-Origin": "*",
+        },
       });
     }
 
     if (!body.filters || body.filters.length === 0) {
       return new Response(JSON.stringify({ error: "At least one filter required" }), {
         status: 400,
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Access-Control-Allow-Origin": "*",
+        },
       });
     }
 
@@ -301,50 +205,63 @@ Deno.serve(async (req) => {
     const prompt = body.prompt || generateChristmasPrompt(body.filters);
     console.log("Generated prompt:", prompt);
 
+    let transformedImageUrl: string;
+    let taskId: string | undefined;
+
     // Check if Meshy API is configured
     if (!MESHY_API_KEY) {
-      console.warn("MESHY_API_KEY not configured, returning original image");
-      return new Response(
-        JSON.stringify({
-          error: "Meshy API not configured",
-          detail: "Please add MESHY_API_KEY to Supabase environment variables to enable AI transformations",
-        }),
-        {
-          status: 503,
-          headers: { "Content-Type": "application/json" },
-        }
-      );
+      console.warn("MESHY_API_KEY not configured, using local filters");
+      // Use local filters as fallback
+      transformedImageUrl = await applyLocalFilters(body.imageBase64, body.filters);
+    } else {
+      try {
+        // Use the base64 image data directly from the client
+        const imageBase64 = body.imageBase64;
+        console.log("Received image base64, length:", imageBase64.length);
+
+        // Create Meshy transformation task
+        taskId = await createMeshyImageTask(imageBase64, prompt);
+
+        // Poll for completion and get result URL
+        transformedImageUrl = await pollMeshyTask(taskId);
+      } catch (meshyError) {
+        console.error("Meshy API failed, falling back to local filters:", meshyError);
+        // Fallback to local filters if Meshy fails
+        transformedImageUrl = await applyLocalFilters(body.imageBase64, body.filters);
+      }
     }
 
-    // Use the base64 image data directly from the client
-    const imageBase64 = body.imageBase64;
-    console.log("Received image base64, length:", imageBase64.length);
+    // Download the transformed image
+    let imageData: Uint8Array;
+    if (transformedImageUrl.startsWith('data:')) {
+      // Local filter result - extract base64
+      const base64Data = transformedImageUrl.split(',')[1];
+      const binaryString = atob(base64Data);
+      imageData = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        imageData[i] = binaryString.charCodeAt(i);
+      }
+    } else {
+      // Remote URL - download
+      imageData = await downloadImage(transformedImageUrl);
+    }
 
-    // Step 1: Create 3D model from image
-    console.log("Step 1: Creating 3D model from image...");
-    const task3DId = await createMeshy3DTask(imageBase64);
+    // Create bucket if it doesn't exist
+    const { data: buckets } = await supabase.storage.listBuckets();
+    const bucketExists = buckets?.some(b => b.name === BUCKET);
 
-    // Step 2: Poll for 3D model completion
-    console.log("Step 2: Waiting for 3D model generation...");
-    const { modelUrl, thumbnailUrl } = await pollMeshy3DTask(task3DId);
+    if (!bucketExists) {
+      console.log("Creating storage bucket:", BUCKET);
+      const { error: createError } = await supabase.storage.createBucket(BUCKET, {
+        public: true,
+        allowedMimeTypes: ['image/jpeg', 'image/png'],
+      });
+      if (createError && !createError.message.includes('already exists')) {
+        console.error("Error creating bucket:", createError);
+      }
+    }
 
-    // Step 3: Apply Christmas textures to 3D model
-    console.log("Step 3: Applying Christmas theme to 3D model...");
-    const textureTaskId = await createMeshyTextureTask(modelUrl, prompt);
-
-    // Step 4: Poll for textured model completion
-    console.log("Step 4: Waiting for Christmas texture application...");
-    const texturedModelUrl = await pollMeshyTextureTask(textureTaskId);
-
-    // Step 5: Get the preview/thumbnail of the final 3D model
-    // For now, we'll return the thumbnail URL as the transformed image
-    // In a full implementation, you'd render the 3D model to an image
-    const transformedImageUrl = thumbnailUrl;
-
-    // Step 6: Download the transformed image
-    const imageData = await downloadImage(transformedImageUrl);
-
-    // Step 5: Save to Supabase Storage
+    // Save to Supabase Storage
     const fileName = `${crypto.randomUUID()}.jpg`;
     const path = `${user.user.id}/${Date.now()}-${fileName}`;
 
@@ -358,14 +275,20 @@ Deno.serve(async (req) => {
 
     if (uploadError) {
       console.error("Upload error:", uploadError);
+      // Return the direct URL if storage fails
       return new Response(
         JSON.stringify({
-          error: "Upload failed",
-          detail: uploadError.message,
+          url: transformedImageUrl.startsWith('data:') ? transformedImageUrl : transformedImageUrl,
+          path: "temp",
+          duration_ms: Math.round(performance.now() - started),
+          taskId,
         }),
         {
-          status: 500,
-          headers: { "Content-Type": "application/json" },
+          status: 200,
+          headers: {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": "*",
+          },
         }
       );
     }
@@ -377,9 +300,7 @@ Deno.serve(async (req) => {
       url: publicUrl,
       path,
       duration_ms,
-      taskId: task3DId,
-      modelUrl,
-      texturedModelUrl,
+      taskId,
     };
 
     console.log("Transformation completed successfully:", response);

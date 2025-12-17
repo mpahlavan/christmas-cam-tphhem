@@ -14,8 +14,6 @@ export type ChristmasTransformResult = {
   path: string;
   duration_ms: number;
   taskId?: string;
-  modelUrl?: string;
-  texturedModelUrl?: string;
 };
 
 type State =
