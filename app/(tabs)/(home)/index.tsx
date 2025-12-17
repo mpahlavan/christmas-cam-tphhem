@@ -39,6 +39,7 @@ const CONTAINER_HEIGHT = 400;
 
 export default function HomeScreen() {
   const [imageUri, setImageUri] = useState<string | null>(null);
+  const [imageBase64, setImageBase64] = useState<string | null>(null);
   const [transformedImageUri, setTransformedImageUri] = useState<string | null>(null);
   const [selectedFilters, setSelectedFilters] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
@@ -112,7 +113,8 @@ export default function HomeScreen() {
         mediaTypes: ['images'],
         allowsEditing: true,
         aspect: [4, 3],
-        quality: 1,
+        quality: 0.8,
+        base64: true,
       });
 
       console.log('Camera result:', JSON.stringify(result, null, 2));
@@ -128,8 +130,10 @@ export default function HomeScreen() {
         const uri = asset.uri;
         console.log('Photo captured successfully:', uri);
         console.log('Original image dimensions:', asset.width, asset.height);
-        
+        console.log('Base64 available:', !!asset.base64);
+
         setImageUri(uri);
+        setImageBase64(asset.base64 || null);
         setTransformedImageUri(null);
         setOriginalImageSize({ width: asset.width, height: asset.height });
         setSelectedFilters([]);
@@ -160,7 +164,8 @@ export default function HomeScreen() {
         mediaTypes: ['images'],
         allowsEditing: true,
         aspect: [4, 3],
-        quality: 1,
+        quality: 0.8,
+        base64: true,
       });
 
       console.log('Image picker result:', JSON.stringify(result, null, 2));
@@ -176,8 +181,10 @@ export default function HomeScreen() {
         const uri = asset.uri;
         console.log('Image selected successfully:', uri);
         console.log('Original image dimensions:', asset.width, asset.height);
-        
+        console.log('Base64 available:', !!asset.base64);
+
         setImageUri(uri);
+        setImageBase64(asset.base64 || null);
         setTransformedImageUri(null);
         setOriginalImageSize({ width: asset.width, height: asset.height });
         setSelectedFilters([]);
@@ -209,7 +216,7 @@ export default function HomeScreen() {
   };
 
   const applyAiTransform = async () => {
-    if (!imageUri) {
+    if (!imageUri || !imageBase64) {
       Alert.alert('Error', 'Please select an image first');
       return;
     }
@@ -222,6 +229,7 @@ export default function HomeScreen() {
     console.log('Applying AI transform with filters:', selectedFilters);
     const result = await transform({
       imageUri,
+      imageBase64,
       filters: selectedFilters,
     });
 
@@ -248,6 +256,7 @@ export default function HomeScreen() {
   const resetImage = () => {
     console.log('Resetting image');
     setImageUri(null);
+    setImageBase64(null);
     setTransformedImageUri(null);
     setSelectedFilters([]);
     setImageSize({ width: 0, height: 0 });

@@ -13,7 +13,7 @@ const supabase = createClient(SUPABASE_URL, SERVICE_ROLE, {
 });
 
 type TransformRequest = {
-  imageUri: string;
+  imageBase64: string;
   filters: string[];
   prompt?: string;
 };
@@ -193,8 +193,8 @@ Deno.serve(async (req) => {
     }
 
     const body = (await req.json()) as TransformRequest;
-    if (!body.imageUri) {
-      return new Response(JSON.stringify({ error: "Image URI required" }), {
+    if (!body.imageBase64) {
+      return new Response(JSON.stringify({ error: "Image data required" }), {
         status: 400,
         headers: { "Content-Type": "application/json" },
       });
@@ -228,8 +228,9 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Step 1: Convert image to base64
-    const imageBase64 = await imageUrlToBase64(body.imageUri);
+    // Use the base64 image data directly from the client
+    const imageBase64 = body.imageBase64;
+    console.log("Received image base64, length:", imageBase64.length);
 
     // Step 2: Create Meshy transformation task
     const taskId = await createMeshyTask(imageBase64, prompt);

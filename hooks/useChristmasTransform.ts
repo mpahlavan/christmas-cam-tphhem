@@ -4,6 +4,7 @@ import { supabase } from '@/app/integrations/supabase/client';
 
 export type ChristmasTransformParams = {
   imageUri: string;
+  imageBase64: string;
   filters: string[];
   prompt?: string;
 };
@@ -35,11 +36,11 @@ export function useChristmasTransform() {
     async (
       params: ChristmasTransformParams
     ): Promise<ChristmasTransformResult | null> => {
-      if (!params.imageUri) {
+      if (!params.imageBase64) {
         setState({
           status: 'error',
           data: null,
-          error: 'Image URI is required',
+          error: 'Image data is required',
         });
         return null;
       }
@@ -56,13 +57,13 @@ export function useChristmasTransform() {
       setState({ status: 'loading', data: null, error: null });
 
       try {
-        console.log('Calling christmas-transform function with:', params);
+        console.log('Calling christmas-transform function with filters:', params.filters);
 
         const { data, error } = await supabase.functions.invoke(
           'christmas-transform',
           {
             body: {
-              imageUri: params.imageUri,
+              imageBase64: params.imageBase64,
               filters: params.filters,
               prompt: params.prompt,
             },
